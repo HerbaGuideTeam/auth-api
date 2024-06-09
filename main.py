@@ -1,22 +1,22 @@
 import os
 import uvicorn
 import pyrebase
+import firebase_admin
+import json
 from fastapi import FastAPI
-from models import LoginSchema, SignUpSchema
+from models import LoginSchema, SignUpSchema, LogoutSchema
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import HTTPException
 from fastapi.requests import Request
-from google.cloud import secretmanager
-import json
+from google.cloud import secretmanager, firestore
+from firebase_admin import credentials, auth
+
 
 app = FastAPI(
     description="This is a simple app to show firebase auth with fastapi",
     title="firebase auth",
     docs_url="/"
 )
-
-import firebase_admin
-from firebase_admin import credentials, auth
 
 def access_secret_version(project_id, secret_id, version_id):
     client = secretmanager.SecretManagerServiceClient()
@@ -38,6 +38,8 @@ firebaseConfig = access_secret_version('c241-ps193', 'firebase_config','4')
 
 firebase = pyrebase.initialize_app(firebaseConfig)
 
+db = firestore.Client()
+
 @app.post('/signup')
 async def create_an_account(user_data: SignUpSchema):
     name = user_data.name
@@ -45,11 +47,21 @@ async def create_an_account(user_data: SignUpSchema):
     password = user_data.password
 
     try:
+        # Create user in Firebase Authentication
         user = auth.create_user(
             email=email,
             password=password,
             display_name=name
         )
+        
+        # Save user data to Firestore
+        user_ref = db.collection('users').document(user.uid)
+        user_ref.set({
+            'uid': user.uid,
+            'name': name,
+            'email': email
+        })
+        
         return JSONResponse(content={"message": f"User account created successfully for user {user.uid}"},
                             status_code=201)
     except auth.EmailAlreadyExistsError:
@@ -70,16 +82,34 @@ async def create_access_token(user_data: LoginSchema):
         )
 
         token = user['idToken']
+        user_info = auth.get_user(user['localId'])  # Get user info
 
         return JSONResponse(
             content={
-                "token": token
+                "token": token,
+                "user": {
+                    "uid": user_info.uid,
+                    "email": user_info.email,
+                    "display_name": user_info.display_name
+                }
             }, status_code=200
         )
     except:
         raise HTTPException(
             status_code=400, detail="Invalid Credentials"
         )
+    
+@app.post('/logout')
+async def logout(logout_data: LogoutSchema):
+    jwt = logout_data.token
+    if not jwt:
+        raise HTTPException(status_code=400, detail="Authorization token missing")
+
+    try:
+        user = auth.verify_id_token(jwt)
+        return JSONResponse(content={"message": "Logout successful"}, status_code=200)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid token: {str(e)}")
 
 @app.post('/ping')
 async def validate_token(request: Request):

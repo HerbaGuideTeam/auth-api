@@ -25,3 +25,13 @@ class LoginSchema(BaseModel):
                 "password": "samplepass123"
             }
         }
+
+class LogoutSchema(BaseModel):
+    token: str
+
+    class Config:
+        json_schema_extra = {
+            "example":{
+                "token": ""
+            }
+        }
