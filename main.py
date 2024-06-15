@@ -10,6 +10,8 @@ from fastapi.exceptions import HTTPException
 from fastapi.requests import Request
 from google.cloud import secretmanager, firestore
 from firebase_admin import credentials, auth
+from firebase_admin.auth import ExpiredIdTokenError
+
 
 
 app = FastAPI(
@@ -115,9 +117,15 @@ async def logout(logout_data: LogoutSchema):
 async def validate_token(request: Request):
     headers = request.headers
     jwt = headers.get('authorization')
-    user = auth.verify_id_token(jwt)
-
-    return user["user_id"]
+    if not jwt:
+        raise HTTPException(status_code=400, detail="Authorization token missing")
+    try:
+        user = auth.verify_id_token(jwt)
+        return JSONResponse(content={"user_id": user["uid"], "token": jwt}, status_code=200)
+    except ExpiredIdTokenError:
+        raise HTTPException(status_code=401, detail="Token has expired")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Invalid token: {str(e)}")
 
 @app.get('/user/{uid}')
 async def get_user(uid: str):
@@ -137,4 +145,4 @@ async def get_user(uid: str):
         )
 
 if __name__ == "__main__":
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="localhost", port=8000, reload=True)
