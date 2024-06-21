@@ -11,9 +11,6 @@ from fastapi.requests import Request
 from google.cloud import secretmanager, firestore
 from firebase_admin import credentials, auth
 from firebase_admin.auth import ExpiredIdTokenError
-from google.oauth2 import id_token
-from google.auth.transport import requests
-
 
 
 app = FastAPI(
@@ -102,44 +99,6 @@ async def create_access_token(user_data: LoginSchema):
         raise HTTPException(
             status_code=400, detail="Invalid Credentials"
         )
-    
-provider = firebase.auth.GoogleAuthProvider()
-
-@app.post('/login_google')
-async def login_google(request: Request):
-    body = await request.json()
-    token = body.get('id_token')
-    if not token:
-        raise HTTPException(status_code=400, detail="Authorization token missing")
-
-    try:
-        id_info = id_token.verify_oauth2_token(token, requests.Request(), '828100792435-pfg1pvv2dlhmhdqbvvh4sl8ccji6dm6g.apps.googleusercontent.com')
-        user_id = id_info['sub']
-
-        try:
-            user = auth.get_user(user_id)
-        except auth.UserNotFoundError:
-
-            user = auth.create_user(
-                uid=user_id,
-                email=id_info.get('email'),
-                display_name=id_info.get('name')
-            )
-    
-            user_ref = db.collection('users').document(user.uid)
-            user_ref.set({
-                'uid': user.uid,
-                'name': id_info.get('name'),
-                'email': id_info.get('email')
-            })
-
-        return JSONResponse(
-            content={
-                "token": token
-            }, status_code=200
-        )
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Invalid token: {str(e)}")
     
 @app.post('/logout')
 async def logout(logout_data: LogoutSchema):
