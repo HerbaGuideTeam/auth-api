@@ -137,11 +137,8 @@ Ensure that your Firebase and Firestore configurations are set correctly in the 
 ### Validate Token
 - **URL:** `/ping`
 - **Method:** `POST`
-- **Payload:**
-  ```json
-  {
-      "authorization": "Bearer <token>"
-  }
+- **Headers:**
+    - `Authorization`: `Bearer <token>` : use a token from login
   
 #### Responses
 - **Success Response (200 OK):**
